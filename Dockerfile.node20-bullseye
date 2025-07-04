@@ -6,7 +6,7 @@ RUN set -ex \
   && apt-get install -y --no-install-recommends ca-certificates apt-transport-https \
     gnupg2 lsb-release debian-archive-keyring \
     curl wget net-tools dnsutils mtr telnet rsync git-core htop iftop screen vim \
-    cron supervisor locales openssh-server bzip2 libfontconfig less netcat logrotate
+    cron supervisor locales openssh-server bzip2 libfontconfig less netcat logrotate \
   && rm -rf /var/lib/apt/lists/*
 
 
