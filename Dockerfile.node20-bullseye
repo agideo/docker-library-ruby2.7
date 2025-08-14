@@ -1,5 +1,6 @@
 FROM ruby:2.7.8-bullseye
 
+# Install basic system packages
 RUN set -ex \
   && apt-get update \
   && apt-get upgrade -y \
@@ -9,76 +10,85 @@ RUN set -ex \
     cron supervisor locales openssh-server bzip2 libfontconfig less netcat logrotate \
   && rm -rf /var/lib/apt/lists/*
 
-
+# Configure supervisor, locale, and SSH
 RUN set -ex \
-  && { \
-      echo '[program:cron]'; \
-      echo 'command=/usr/sbin/cron -f'; \
-  } >> /etc/supervisor/conf.d/cron.conf \
-  \
+  && cat > /etc/supervisor/conf.d/cron.conf << 'EOF'
+[program:cron]
+command=/usr/sbin/cron -f
+EOF
+\
   && mkdir -p /var/log/supervisor \
-  && { \
-    echo '[supervisord]'; \
-    echo 'nodaemon=true'; \
-  } >> /etc/supervisor/conf.d/supervisord.conf \
-  \
+  && cat > /etc/supervisor/conf.d/supervisord.conf << 'EOF'
+[supervisord]
+nodaemon=true
+EOF
+\
   && echo "en_US.UTF-8 UTF-8" > /etc/locale.gen \
   && locale-gen \
   && update-locale LANG=en_US.UTF-8 LANGUAGE=en_US:en: \
-  \
+\
   && mkdir -p /var/run/sshd \
-  && { \
-    echo '[program:sshd]'; \
-    echo 'command=/usr/sbin/sshd -D'; \
-  } >> /etc/supervisor/conf.d/sshd.conf
+  && cat > /etc/supervisor/conf.d/sshd.conf << 'EOF'
+[program:sshd]
+command=/usr/sbin/sshd -D
+EOF
 
 ENV LC_ALL en_US.UTF-8
 
-RUN curl https://nginx.org/keys/nginx_signing.key | gpg --dearmor > /usr/share/keyrings/nginx-archive-keyring.gpg \
+# Install nginx with architecture detection
+RUN set -ex \
+  && curl -fsSL https://nginx.org/keys/nginx_signing.key | gpg --dearmor -o /usr/share/keyrings/nginx-archive-keyring.gpg \
   && echo "deb [signed-by=/usr/share/keyrings/nginx-archive-keyring.gpg] http://nginx.org/packages/debian $(lsb_release -cs) nginx" > /etc/apt/sources.list.d/nginx.list \
   && apt-get update \
   && apt-get install --no-install-recommends --no-install-suggests -y nginx \
-  && { \
-    echo '[program:nginx]'; \
-    echo 'command=nginx -g "daemon off;"'; \
-  } >> /etc/supervisor/conf.d/nginx.conf \
+  && cat > /etc/supervisor/conf.d/nginx.conf << 'EOF'
+[program:nginx]
+command=nginx -g "daemon off;"
+EOF
+\
   && rm -rf /var/lib/apt/lists/*
 
+# Install Node.js (supports multiple architectures automatically)
 RUN set -ex \
-  && curl -sL https://deb.nodesource.com/setup_20.x | bash - \
+  && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
   && apt-get update \
   && apt-get install -y --no-install-recommends nodejs \
   && rm -rf /var/lib/apt/lists/*
 
-RUN curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | apt-key add - \
-  && echo "deb https://dl.yarnpkg.com/debian/ stable main" | tee /etc/apt/sources.list.d/yarn.list \
+# Install Yarn (supports multiple architectures)
+RUN set -ex \
+  && curl -fsSL https://dl.yarnpkg.com/debian/pubkey.gpg | gpg --dearmor -o /usr/share/keyrings/yarn-keyring.gpg \
+  && echo "deb [signed-by=/usr/share/keyrings/yarn-keyring.gpg] https://dl.yarnpkg.com/debian/ stable main" > /etc/apt/sources.list.d/yarn.list \
   && apt-get update \
-  && apt-get install --no-install-recommends yarn \
+  && apt-get install --no-install-recommends -y yarn \
   && rm -rf /var/lib/apt/lists/*
 
+# Configure timezone and SSH
 RUN set -ex \
   && ln -fs /usr/share/zoneinfo/Asia/Shanghai /etc/localtime \
   && dpkg-reconfigure -f noninteractive tzdata \
   && mkdir -p /root/.ssh \
-  && { \
-    echo 'Host *'; \
-    echo 'ServerAliveInterval=15'; \
-    echo 'ServerAliveCountMax=6'; \
-    echo 'ForwardAgent yes'; \
-  } >> /root/.ssh/config \
+  && cat > /root/.ssh/config << 'EOF'
+Host *
+ServerAliveInterval=15
+ServerAliveCountMax=6
+ForwardAgent yes
+EOF
+\
   && mkdir -p /root/.bash.d \
   && touch /root/.app.bash \
-  && { \
-    echo 'source ~/.bash.d/10_ssh-agent.bash'; \
-    echo 'source ~/.app.bash'; \
-    echo "export TERM=xterm"; \
-    echo "export PATH=$(echo $PATH)"; \
-    echo "unset HISTFILE"; \
-  } >> /root/.bashrc
+  && cat >> /root/.bashrc << 'EOF'
+source ~/.bash.d/10_ssh-agent.bash
+source ~/.app.bash
+export TERM=xterm
+export PATH=$(echo $PATH)
+unset HISTFILE
+bind '"\e[A": history-search-backward'
+bind '"\e[B": history-search-forward'
+EOF
 
 COPY files/bash.d/10_ssh-agent.bash /root/.bash.d/
 
 WORKDIR /app
-
 EXPOSE 22 80 3000
 CMD ["sh", "-c", "env >> /etc/environment ; /usr/bin/supervisord"]
