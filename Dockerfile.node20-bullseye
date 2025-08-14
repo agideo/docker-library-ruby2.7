@@ -10,6 +10,10 @@ RUN set -ex \
   cron supervisor locales openssh-server bzip2 libfontconfig less netcat logrotate \
   && rm -rf /var/lib/apt/lists/*
 
+# update rubygems
+RUN gem install rubygems-update -v '~> 3.4.22' \
+  && update_rubygems
+
 # Configure supervisor
 RUN set -ex \
   && cat > /etc/supervisor/conf.d/cron.conf << 'EOF'
