@@ -5,25 +5,33 @@ RUN set -ex \
   && apt-get update \
   && apt-get upgrade -y \
   && apt-get install -y --no-install-recommends ca-certificates apt-transport-https \
-    gnupg2 lsb-release debian-archive-keyring \
-    curl wget net-tools dnsutils mtr telnet rsync git-core htop iftop screen vim \
-    cron supervisor locales openssh-server bzip2 libfontconfig less netcat logrotate \
+  gnupg2 lsb-release debian-archive-keyring \
+  curl wget net-tools dnsutils mtr telnet rsync git-core htop iftop screen vim \
+  cron supervisor locales openssh-server bzip2 libfontconfig less netcat logrotate \
   && rm -rf /var/lib/apt/lists/*
 
-# Configure supervisor, locale, and SSH
+# Configure supervisor
 RUN set -ex \
   && cat > /etc/supervisor/conf.d/cron.conf << 'EOF'
 [program:cron]
 command=/usr/sbin/cron -f
 EOF
+
+RUN set -ex \
   && mkdir -p /var/log/supervisor \
   && cat > /etc/supervisor/conf.d/supervisord.conf << 'EOF'
 [supervisord]
 nodaemon=true
 EOF
+
+# Configure locale
+RUN set -ex \
   && echo "en_US.UTF-8 UTF-8" > /etc/locale.gen \
   && locale-gen \
-  && update-locale LANG=en_US.UTF-8 LANGUAGE=en_US:en: \
+  && update-locale LANG=en_US.UTF-8 LANGUAGE=en_US:en:
+
+# Configure SSH
+RUN set -ex \
   && mkdir -p /var/run/sshd \
   && cat > /etc/supervisor/conf.d/sshd.conf << 'EOF'
 [program:sshd]
@@ -38,11 +46,13 @@ RUN set -ex \
   && echo "deb [signed-by=/usr/share/keyrings/nginx-archive-keyring.gpg] http://nginx.org/packages/debian $(lsb_release -cs) nginx" > /etc/apt/sources.list.d/nginx.list \
   && apt-get update \
   && apt-get install --no-install-recommends --no-install-suggests -y nginx \
+  && rm -rf /var/lib/apt/lists/*
+
+RUN set -ex \
   && cat > /etc/supervisor/conf.d/nginx.conf << 'EOF'
 [program:nginx]
 command=nginx -g "daemon off;"
 EOF
-  && rm -rf /var/lib/apt/lists/*
 
 # Install Node.js (supports multiple architectures automatically)
 RUN set -ex \
@@ -59,10 +69,13 @@ RUN set -ex \
   && apt-get install --no-install-recommends -y yarn \
   && rm -rf /var/lib/apt/lists/*
 
-# Configure timezone, SSH, and create ssh-agent script
+# Configure timezone
 RUN set -ex \
   && ln -fs /usr/share/zoneinfo/Asia/Shanghai /etc/localtime \
-  && dpkg-reconfigure -f noninteractive tzdata \
+  && dpkg-reconfigure -f noninteractive tzdata
+
+# Configure SSH client
+RUN set -ex \
   && mkdir -p /root/.ssh \
   && cat > /root/.ssh/config << 'EOF'
 Host *
@@ -70,6 +83,9 @@ ServerAliveInterval=15
 ServerAliveCountMax=6
 ForwardAgent yes
 EOF
+
+# Create ssh-agent script
+RUN set -ex \
   && mkdir -p /root/.bash.d \
   && cat > /root/.bash.d/10_ssh-agent.bash << 'EOF'
 if [ "$DOCKER_ENV" != development ]; then
@@ -90,6 +106,9 @@ else
 start_agent
 fi
 EOF
+
+# Configure bash environment
+RUN set -ex \
   && touch /root/.app.bash \
   && cat >> /root/.bashrc << 'EOF'
 source ~/.bash.d/10_ssh-agent.bash
