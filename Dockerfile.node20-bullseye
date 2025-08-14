@@ -2,33 +2,33 @@ FROM ruby:2.7.8-bullseye
 
 # Install basic system packages
 RUN set -ex \
-  && apt-get update \
-  && apt-get upgrade -y \
-  && apt-get install -y --no-install-recommends ca-certificates apt-transport-https \
-    gnupg2 lsb-release debian-archive-keyring \
-    curl wget net-tools dnsutils mtr telnet rsync git-core htop iftop screen vim \
-    cron supervisor locales openssh-server bzip2 libfontconfig less netcat logrotate \
-  && rm -rf /var/lib/apt/lists/*
+ && apt-get update \
+ && apt-get upgrade -y \
+ && apt-get install -y --no-install-recommends ca-certificates apt-transport-https \
+ gnupg2 lsb-release debian-archive-keyring \
+ curl wget net-tools dnsutils mtr telnet rsync git-core htop iftop screen vim \
+ cron supervisor locales openssh-server bzip2 libfontconfig less netcat logrotate \
+ && rm -rf /var/lib/apt/lists/*
 
 # Configure supervisor, locale, and SSH
 RUN set -ex \
-  && cat > /etc/supervisor/conf.d/cron.conf << 'EOF'
+ && cat > /etc/supervisor/conf.d/cron.conf << 'EOF'
 [program:cron]
 command=/usr/sbin/cron -f
 EOF
 \
-  && mkdir -p /var/log/supervisor \
-  && cat > /etc/supervisor/conf.d/supervisord.conf << 'EOF'
+&& mkdir -p /var/log/supervisor \
+ && cat > /etc/supervisor/conf.d/supervisord.conf << 'EOF'
 [supervisord]
 nodaemon=true
 EOF
 \
-  && echo "en_US.UTF-8 UTF-8" > /etc/locale.gen \
-  && locale-gen \
-  && update-locale LANG=en_US.UTF-8 LANGUAGE=en_US:en: \
+&& echo "en_US.UTF-8 UTF-8" > /etc/locale.gen \
+ && locale-gen \
+ && update-locale LANG=en_US.UTF-8 LANGUAGE=en_US:en: \
 \
-  && mkdir -p /var/run/sshd \
-  && cat > /etc/supervisor/conf.d/sshd.conf << 'EOF'
+ && mkdir -p /var/run/sshd \
+ && cat > /etc/supervisor/conf.d/sshd.conf << 'EOF'
 [program:sshd]
 command=/usr/sbin/sshd -D
 EOF
@@ -37,47 +37,67 @@ ENV LC_ALL en_US.UTF-8
 
 # Install nginx with architecture detection
 RUN set -ex \
-  && curl -fsSL https://nginx.org/keys/nginx_signing.key | gpg --dearmor -o /usr/share/keyrings/nginx-archive-keyring.gpg \
-  && echo "deb [signed-by=/usr/share/keyrings/nginx-archive-keyring.gpg] http://nginx.org/packages/debian $(lsb_release -cs) nginx" > /etc/apt/sources.list.d/nginx.list \
-  && apt-get update \
-  && apt-get install --no-install-recommends --no-install-suggests -y nginx \
-  && cat > /etc/supervisor/conf.d/nginx.conf << 'EOF'
+ && curl -fsSL https://nginx.org/keys/nginx_signing.key | gpg --dearmor -o /usr/share/keyrings/nginx-archive-keyring.gpg \
+ && echo "deb [signed-by=/usr/share/keyrings/nginx-archive-keyring.gpg] http://nginx.org/packages/debian $(lsb_release -cs) nginx" > /etc/apt/sources.list.d/nginx.list \
+ && apt-get update \
+ && apt-get install --no-install-recommends --no-install-suggests -y nginx \
+ && cat > /etc/supervisor/conf.d/nginx.conf << 'EOF'
 [program:nginx]
 command=nginx -g "daemon off;"
 EOF
 \
-  && rm -rf /var/lib/apt/lists/*
+&& rm -rf /var/lib/apt/lists/*
 
 # Install Node.js (supports multiple architectures automatically)
 RUN set -ex \
-  && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
-  && apt-get update \
-  && apt-get install -y --no-install-recommends nodejs \
-  && rm -rf /var/lib/apt/lists/*
+ && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+ && apt-get update \
+ && apt-get install -y --no-install-recommends nodejs \
+ && rm -rf /var/lib/apt/lists/*
 
 # Install Yarn (supports multiple architectures)
 RUN set -ex \
-  && curl -fsSL https://dl.yarnpkg.com/debian/pubkey.gpg | gpg --dearmor -o /usr/share/keyrings/yarn-keyring.gpg \
-  && echo "deb [signed-by=/usr/share/keyrings/yarn-keyring.gpg] https://dl.yarnpkg.com/debian/ stable main" > /etc/apt/sources.list.d/yarn.list \
-  && apt-get update \
-  && apt-get install --no-install-recommends -y yarn \
-  && rm -rf /var/lib/apt/lists/*
+ && curl -fsSL https://dl.yarnpkg.com/debian/pubkey.gpg | gpg --dearmor -o /usr/share/keyrings/yarn-keyring.gpg \
+ && echo "deb [signed-by=/usr/share/keyrings/yarn-keyring.gpg] https://dl.yarnpkg.com/debian/ stable main" > /etc/apt/sources.list.d/yarn.list \
+ && apt-get update \
+ && apt-get install --no-install-recommends -y yarn \
+ && rm -rf /var/lib/apt/lists/*
 
-# Configure timezone and SSH
+# Configure timezone, SSH, and create ssh-agent script
 RUN set -ex \
-  && ln -fs /usr/share/zoneinfo/Asia/Shanghai /etc/localtime \
-  && dpkg-reconfigure -f noninteractive tzdata \
-  && mkdir -p /root/.ssh \
-  && cat > /root/.ssh/config << 'EOF'
+ && ln -fs /usr/share/zoneinfo/Asia/Shanghai /etc/localtime \
+ && dpkg-reconfigure -f noninteractive tzdata \
+ && mkdir -p /root/.ssh \
+ && cat > /root/.ssh/config << 'EOF'
 Host *
 ServerAliveInterval=15
 ServerAliveCountMax=6
 ForwardAgent yes
 EOF
 \
-  && mkdir -p /root/.bash.d \
-  && touch /root/.app.bash \
-  && cat >> /root/.bashrc << 'EOF'
+&& mkdir -p /root/.bash.d \
+ && cat > /root/.bash.d/10_ssh-agent.bash << 'EOF'
+if [ "$DOCKER_ENV" != development ]; then
+  return
+fi
+SSH_ENV=$HOME/.ssh/environment
+function start_agent {
+     /usr/bin/ssh-agent | sed 's/^echo/#echo/' > ${SSH_ENV}
+     . ${SSH_ENV} > /dev/null
+     /usr/bin/ssh-add
+}
+if [ -f "${SSH_ENV}" ]; then
+     . ${SSH_ENV} > /dev/null
+     ps -efp ${SSH_AGENT_PID} | grep ssh-agent$ > /dev/null || {
+         start_agent
+     }
+else
+     start_agent
+fi
+EOF
+\
+ && touch /root/.app.bash \
+ && cat >> /root/.bashrc << 'EOF'
 source ~/.bash.d/10_ssh-agent.bash
 source ~/.app.bash
 export TERM=xterm
@@ -86,8 +106,6 @@ unset HISTFILE
 bind '"\e[A": history-search-backward'
 bind '"\e[B": history-search-forward'
 EOF
-
-COPY files/bash.d/10_ssh-agent.bash /root/.bash.d/
 
 WORKDIR /app
 EXPOSE 22 80 3000
