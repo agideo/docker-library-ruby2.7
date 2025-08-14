@@ -2,12 +2,12 @@ name: Build docker-library-ruby2.7:node20-bullseye
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ main ]
     paths:
       - 'Dockerfile.node20-bullseye'
       - '.github/workflows/**'
   pull_request:
-    branches: [ main, master ]
+    branches: [ main ]
     paths:
       - 'Dockerfile.node20-bullseye'
   workflow_dispatch:  # 允许手动触发
@@ -47,12 +47,7 @@ jobs:
       with:
         images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
         tags: |
-          # 主要标签
           type=raw,value=${{ env.TAG }}
-          # 带时间戳的标签，用于版本追踪
-          type=raw,value=${{ env.TAG }}-{{date 'YYYYMMDD'}}
-          # 带 Git SHA 的标签，用于精确追踪
-          type=raw,value=${{ env.TAG }}-{{sha}}
 
     - name: Build and push Docker image
       uses: docker/build-push-action@v5
