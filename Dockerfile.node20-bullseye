@@ -6,7 +6,7 @@ RUN set -ex \
   && apt-get upgrade -y \
   && apt-get install -y --no-install-recommends ca-certificates apt-transport-https \
   gnupg2 lsb-release debian-archive-keyring \
-  curl wget net-tools dnsutils mtr telnet rsync git-core htop iftop screen vim \
+  curl wget net-tools iputils-ping iputils-tracepath net-tools dnsutils mtr telnet rsync git-core htop iftop screen vim \
   cron supervisor locales openssh-server bzip2 libfontconfig less netcat logrotate \
   && rm -rf /var/lib/apt/lists/*
 
@@ -118,7 +118,7 @@ RUN set -ex \
 source ~/.bash.d/10_ssh-agent.bash
 source ~/.app.bash
 export TERM=xterm
-export PATH=$(echo $PATH)
+export PATH="$(gem environment | grep "EXECUTABLE DIRECTORY" | cut -d: -f2 | tr -d ' '):$PATH"
 unset HISTFILE
 bind '"\e[A": history-search-backward'
 bind '"\e[B": history-search-forward'
